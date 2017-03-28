@@ -27,6 +27,9 @@
   - [Suspended Payment Creation](#suspended-payment-creation)
   - [Suspended Payment Cancellation](#suspended-payment-cancellation)
   - [Suspended Payment Execution](#suspended-payment-execution)
+  - [Payment Channel Create](#payment-channel-create)
+  - [Payment Channel Fund](#payment-channel-fund)
+  - [Payment Channel Claim](#payment-channel-claim)
 - [API Methods](#api-methods)
   - [connect](#connect)
   - [disconnect](#disconnect)
@@ -53,6 +56,9 @@
   - [prepareSuspendedPaymentCreation](#preparesuspendedpaymentcreation)
   - [prepareSuspendedPaymentCancellation](#preparesuspendedpaymentcancellation)
   - [prepareSuspendedPaymentExecution](#preparesuspendedpaymentexecution)
+  - [preparePaymentChannelCreate](#preparepaymentchannelcreate)
+  - [preparePaymentChannelClaim](#preparepaymentchannelclaim)
+  - [preparePaymentChannelFund](#preparepaymentchannelfund)
   - [sign](#sign)
   - [combine](#combine)
   - [submit](#submit)
@@ -183,6 +189,9 @@ Methods that depend on the state of the Ripple Consensus Ledger are unavailable 
 * [prepareSuspendedPaymentCreation](#preparesuspendedpaymentcreation)
 * [prepareSuspendedPaymentCancellation](#preparesuspendedpaymentcancellation)
 * [prepareSuspendedPaymentExecution](#preparesuspendedpaymentexecution)
+* [preparePaymentChannelCreate](#preparepaymentchannelcreate)
+* [preparePaymentChannelFund](#preparepaymentchannelfund)
+* [preparePaymentChannelClaim](#preparepaymentchannelclaim)
 * [sign](#sign)
 * [generateAddress](#generateaddress)
 * [computeLedgerHash](#computeledgerhash)
@@ -264,8 +273,11 @@ Type | Description
 [suspendedPaymentCreation](#suspended-payment-creation) | A `suspendedPaymentCreation` transaction creates a suspended payment on the ledger, which locks XRP until a cryptographic condition is met or it expires. It is like an escrow service where the Ripple network acts as the escrow agent.
 [suspendedPaymentCancellation](#suspended-payment-cancellation) | A `suspendedPaymentCancellation` transaction unlocks the funds in a suspended payment and sends them back to the creator of the suspended payment, but it will only work after the suspended payment expires.
 [suspendedPaymentExecution](#suspended-payment-execution) | A `suspendedPaymentExecution` transaction unlocks the funds in a suspended payment and sends them to the destination of the suspended payment, but it will only work if the cryptographic condition is provided.
+[paymentChannelCreate](#payment-channel-create) | A `paymentChannelCreate` transaction creates a unidirectional channel and funds it with XRP. The address sending this transaction becomes the "source address" of the payment channel.
+[paymentChannelFund](#payment-channel-fund) | A `paymentChannelFund` transaction adds additional XRP to an open payment channel, updates the expiration time of the channel, or both. Only the source address of the channel can use this transaction. (Transactions from other addresses fail with the error tecNO_PERMISSION.)
+[paymentChannelClaim](#payment-channel-claim) | A `paymentChannelClaim` transaction claims XRP from a payment channel, adjusts the payment channel's expiration, or both.
 
-The three "suspended payment" transaction types are not supported by the production Ripple peer-to-peer network at this time. They are available for testing purposes if you [configure RippleAPI](#boilerplate) to connect to the [Ripple Test Net](https://ripple.com/build/ripple-test-net/) instead.
+The "suspended payment" and "payment channel" transaction types are not supported by the production Ripple peer-to-peer network at this time. They are available for testing purposes if you [configure RippleAPI](#boilerplate) to connect to the [Ripple Test Net](https://ripple.com/build/ripple-test-net/) instead.
 
 ## Transaction Flow
 
@@ -280,6 +292,9 @@ Executing a transaction with `RippleAPI` requires the following four steps:
     * [prepareSuspendedPaymentCreation](#preparesuspendedpaymentcreation)
     * [prepareSuspendedPaymentCancellation](#preparesuspendedpaymentcancellation)
     * [prepareSuspendedPaymentExecution](#preparesuspendedpaymentexecution)
+    * [preparePaymentChannelCreate](#preparepaymentchannelcreate)
+    * [preparePaymentChannelFund](#preparepaymentchannelfund)
+    * [preparePaymentChannelClaim](#preparepaymentchannelclaim)
 2. [Sign](#sign) - Cryptographically sign the transaction locally and save the [transaction ID](#transaction-id). Signing is how the owner of an account authorizes a transaction to take place. For multisignature transactions, the `signedTransaction` fields returned by `sign` must be collected and passed to the [combine](#combine) method.
 3. [Submit](#submit) - Submit the transaction to the connected server.
 4. Verify - Verify that the transaction got validated by querying with [getTransaction](#gettransaction). This is necessary because transactions may fail even if they were successfully submitted.
@@ -607,6 +622,78 @@ proof | string | *Optional* A value that produces the digest when hashed. It mus
   "method": 1,
   "digest": "712C36933822AD3A3D136C5DF97AA863B69F9CE88B2D6CE6BDD11BFDE290C19D",
   "proof": "this must have 32 characters...."
+}
+```
+
+
+## Payment Channel Create
+
+See [Transaction Types](#transaction-types) for a description.
+
+Name | Type | Description
+---- | ---- | -----------
+amount | [value](#value) | Amount of XRP for sender to set aside in this channel.
+destination | [address](#ripple-address) | Address to receive XRP claims against this channel.
+settleDelay | number | Amount of time the source address must wait before closing the channel if it has unclaimed XRP.
+publicKey | string | Public key of the key pair the source will use to sign claims against this channel.
+cancelAfter | date-time string | *Optional* Time when this channel expires.
+destinationTag | integer | *Optional* Destination tag.
+sourceTag | integer | *Optional* Source tag.
+
+### Example
+
+
+```json
+{
+  "amount": "1",
+  "destination": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW",
+  "settleDelay": 86400,
+  "publicKey": "32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A"
+}
+```
+
+
+## Payment Channel Fund
+
+See [Transaction Types](#transaction-types) for a description.
+
+Name | Type | Description
+---- | ---- | -----------
+amount | [value](#value) | Amount of XRP to fund the channel with.
+channel | string | 256-bit hexadecimal channel identifier.
+expiration | date-time string | *Optional* New expiration for this channel.
+
+### Example
+
+
+```json
+{
+  "channel": "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198",
+  "amount": "1"
+}
+```
+
+
+## Payment Channel Claim
+
+See [Transaction Types](#transaction-types) for a description.
+
+Name | Type | Description
+---- | ---- | -----------
+channel | string | 256-bit hexadecimal channel identifier.
+amount | [value](#value) | *Optional* XRP balance of this channel after claim is processed.
+balance | [value](#value) | *Optional* Amount of XRP authorized by signature.
+close | boolean | *Optional* Request to close the channel.
+publicKey | string | *Optional* Public key of the channel's sender
+renew | boolean | *Optional* Clear the channel's expiration time.
+signature | string | *Optional* Signature of this claim.
+
+### Example
+
+
+```json
+{
+  "channel": "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198"
 }
 ```
 
@@ -3312,6 +3399,178 @@ return api.prepareSuspendedPaymentExecution(address, suspendedPaymentExecution).
 ```json
 {
   "txJSON": "{\"Flags\":2147483648,\"TransactionType\":\"SuspendedPaymentFinish\",\"Account\":\"r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59\",\"Owner\":\"r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59\",\"OfferSequence\":1234,\"Method\":1,\"Digest\":\"712C36933822AD3A3D136C5DF97AA863B69F9CE88B2D6CE6BDD11BFDE290C19D\",\"Proof\":\"74686973206D757374206861766520333220636861726163746572732E2E2E2E\",\"LastLedgerSequence\":8820051,\"Fee\":\"12\",\"Sequence\":23}",
+  "instructions": {
+    "fee": "0.000012",
+    "sequence": 23,
+    "maxLedgerVersion": 8820051
+  }
+}
+```
+
+
+## preparePaymentChannelCreate
+
+`preparePaymentChannelCreate(address: string, paymentChannelCreate: Object, instructions: Object): Promise<Object>`
+
+Prepare a payment channel creation transaction. The prepared transaction must subsequently be [signed](#sign) and [submitted](#submit).
+
+**Caution:** Payment channels are currently available on the [Ripple Test Net](https://ripple.com/build/ripple-test-net/) only.
+
+### Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+address | [address](#ripple-address) | The address of the account that is creating the transaction.
+paymentChannelCreate | [paymentChannelCreate](#payment-channel-create) | The specification of the payment channel to create.
+instructions | [instructions](#transaction-instructions) | *Optional* Instructions for executing the transaction
+
+### Return Value
+
+This method returns a promise that resolves with an object with the following structure:
+
+<aside class="notice">
+All "prepare*" methods have the same return type.
+</aside>
+
+Name | Type | Description
+---- | ---- | -----------
+txJSON | string | The prepared transaction in rippled JSON format.
+instructions | object | The instructions for how to execute the transaction after adding automatic defaults.
+*instructions.* fee | [value](#value) | An exact fee to pay for the transaction. See [Transaction Fees](#transaction-fees) for more information.
+*instructions.* sequence | [sequence](#account-sequence-number) | The initiating account's sequence number for this transaction.
+*instructions.* maxLedgerVersion | integer,null | The highest ledger version that the transaction can be included in. Set to `null` if there is no maximum.
+
+### Example
+
+```javascript
+const address = 'r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59';
+const paymentChannelCreate = {
+  "amount": "1",
+  "destination": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW",
+  "settleDelay": 86400,
+  "publicKey": "32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A"
+};
+return api.preparePaymentChannelCreate(address, paymentChannelCreate).then(prepared =>
+  {/* ... */});
+```
+
+
+```json
+{
+  "txJSON":"{\"Account\":\"r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59\",\"TransactionType\":\"PaymentChannelCreate\",\"Amount\":\"1000000\",\"Destination\":\"rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW\",\"SettleDelay\":86400,\"PublicKey\":\"32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A\",\"Flags\":2147483648,\"LastLedgerSequence\":8820051,\"Fee\":\"12\",\"Sequence\":23}",
+  "instructions": {
+    "fee": "0.000012",
+    "sequence": 23,
+    "maxLedgerVersion": 8820051
+  }
+}
+```
+
+
+## preparePaymentChannelClaim
+
+`preparePaymentChannelClaim(address: string, paymentChannelClaim: Object, instructions: Object): Promise<Object>`
+
+Prepare a payment channel claim transaction. The prepared transaction must subsequently be [signed](#sign) and [submitted](#submit).
+
+**Caution:** Payment channels are currently available on the [Ripple Test Net](https://ripple.com/build/ripple-test-net/) only.
+
+### Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+address | [address](#ripple-address) | The address of the account that is creating the transaction.
+paymentChannelClaim | [paymentChannelClaim](#payment-channel-claim) | Details of the channel and claim.
+instructions | [instructions](#transaction-instructions) | *Optional* Instructions for executing the transaction
+
+### Return Value
+
+This method returns a promise that resolves with an object with the following structure:
+
+<aside class="notice">
+All "prepare*" methods have the same return type.
+</aside>
+
+Name | Type | Description
+---- | ---- | -----------
+txJSON | string | The prepared transaction in rippled JSON format.
+instructions | object | The instructions for how to execute the transaction after adding automatic defaults.
+*instructions.* fee | [value](#value) | An exact fee to pay for the transaction. See [Transaction Fees](#transaction-fees) for more information.
+*instructions.* sequence | [sequence](#account-sequence-number) | The initiating account's sequence number for this transaction.
+*instructions.* maxLedgerVersion | integer,null | The highest ledger version that the transaction can be included in. Set to `null` if there is no maximum.
+
+### Example
+
+```javascript
+const address = 'r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59';
+const paymentChannelClaim = {
+  "channel": "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198"
+};
+return api.preparePaymentChannelClaim(address, paymentChannelClaim).then(prepared =>
+  {/* ... */});
+```
+
+
+```json
+{
+  "txJSON": "{\"Account\":\"r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59\",\"TransactionType\":\"PaymentChannelClaim\",\"Channel\":\"C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198\",\"Flags\":2147483648,\"LastLedgerSequence\":8820051,\"Fee\":\"12\",\"Sequence\":23}",
+  "instructions": {
+    "fee": "0.000012",
+    "sequence": 23,
+    "maxLedgerVersion": 8820051
+  }
+}
+```
+
+
+## preparePaymentChannelFund
+
+`preparePaymentChannelFund(address: string, paymentChannelFund: Object, instructions: Object): Promise<Object>`
+
+Prepare a payment channel fund transaction. The prepared transaction must subsequently be [signed](#sign) and [submitted](#submit).
+
+**Caution:** Payment channels are currently available on the [Ripple Test Net](https://ripple.com/build/ripple-test-net/) only.
+
+### Parameters
+
+Name | Type | Description
+---- | ---- | -----------
+address | [address](#ripple-address) | The address of the account that is creating the transaction.
+paymentChannelFund | [paymentChannelFund](#payment-channel-fund) | The channel to fund, and the details of how to fund it.
+instructions | [instructions](#transaction-instructions) | *Optional* Instructions for executing the transaction
+
+### Return Value
+
+This method returns a promise that resolves with an object with the following structure:
+
+<aside class="notice">
+All "prepare*" methods have the same return type.
+</aside>
+
+Name | Type | Description
+---- | ---- | -----------
+txJSON | string | The prepared transaction in rippled JSON format.
+instructions | object | The instructions for how to execute the transaction after adding automatic defaults.
+*instructions.* fee | [value](#value) | An exact fee to pay for the transaction. See [Transaction Fees](#transaction-fees) for more information.
+*instructions.* sequence | [sequence](#account-sequence-number) | The initiating account's sequence number for this transaction.
+*instructions.* maxLedgerVersion | integer,null | The highest ledger version that the transaction can be included in. Set to `null` if there is no maximum.
+
+### Example
+
+```javascript
+const address = 'r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59';
+const paymentChannelFund = {
+  "channel": "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198",
+  "amount": "1"
+};
+return api.preparePaymentChannelFund(address, paymentChannelFund).then(prepared =>
+  {/* ... */});
+```
+
+
+```json
+{
+  "txJSON":"{\"Account\":\"r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59\",\"TransactionType\":\"PaymentChannelFund\",\"Channel\":\"C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198\",\"Amount\":\"1000000\",\"Flags\":2147483648,\"LastLedgerSequence\":8820051,\"Fee\":\"12\",\"Sequence\":23}",
   "instructions": {
     "fee": "0.000012",
     "sequence": 23,
