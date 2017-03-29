@@ -64,14 +64,16 @@ function prepareTransaction(txJSON: Object, api: Object,
     const cushion = api._feeCushion
     return common.serverInfo.getFee(api.connection, cushion).then(fee => {
       return api.connection.getFeeRef().then(feeRef => {
-        const extraFee = txJSON.Fulfillment === undefined ? 0 :
+        const extraFee =
+          (txJSON.TransactionType !== 'EscrowFinish' ||
+            txJSON.Fulfillment === undefined) ? 0 :
           (cushion * feeRef * (32 + Math.floor(
             new Buffer(txJSON.Fulfillment, 'hex').length / 16)))
         const feeDrops = common.xrpToDrops(fee)
         if (instructions.maxFee !== undefined) {
           const maxFeeDrops = common.xrpToDrops(instructions.maxFee)
-          const normalFee = BigNumber.min(feeDrops, maxFeeDrops).toString()
-          txJSON.Fee = scaleValue(normalFee, multiplier, extraFee)
+          const normalFee = scaleValue(feeDrops, multiplier, extraFee)
+          txJSON.Fee = BigNumber.min(normalFee, maxFeeDrops).toString();
         } else {
           txJSON.Fee = scaleValue(feeDrops, multiplier, extraFee)
         }
